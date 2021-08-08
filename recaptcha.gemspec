@@ -10,7 +10,8 @@ Gem::Specification.new do |s|
   s.homepage    = "http://github.com/ambethia/recaptcha"
   s.summary     = s.description = "Helpers for the reCAPTCHA API"
   s.license     = "MIT"
-  s.required_ruby_version = '>= 2.4.0'
+  #The actual ruby version needs to be 2.4.0, but since we are using 2.3.8 right now in FD, we are changing this to subdue error messages during installation
+  s.required_ruby_version = '>= 2.3.0'
 
   s.files       = `git ls-files lib rails README.md CHANGELOG.md LICENSE`.split("\n")
 
