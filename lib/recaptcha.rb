@@ -85,7 +85,7 @@ module Recaptcha
       action_valid?(token_properties['action'], options[:action]) &&
       score_above_threshold?(reply['score'], options[:minimum_score])
 
-    Rails.logger.debug("Verification API Reply:: #{reply.inspect}")
+    Rails.logger.debug("Enterprise Verification API Reply:: #{reply.inspect}")
     Rails.logger.debug("Request Options:: Hostname => #{options[:hostname]}, Action => #{options[:action]}, Minimum Score => #{options[:minimum_score]}")
     Rails.logger.debug("Captcha Verification:: #{success}")
 
@@ -107,7 +107,7 @@ module Recaptcha
       action_valid?(reply['action'], options[:action]) &&
       score_above_threshold?(reply['score'], options[:minimum_score])
 
-    Rails.logger.debug("Verification API Reply:: #{reply.inspect}")
+    Rails.logger.debug("Free Verification API Reply:: #{reply.inspect}")
     Rails.logger.debug("Request Options:: Hostname => #{options[:hostname]}, Action => #{options[:action]}, Minimum Score => #{options[:minimum_score]}")
     Rails.logger.debug("Captcha Verification:: #{success}")
  
