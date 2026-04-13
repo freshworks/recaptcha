@@ -50,6 +50,8 @@ Note: Enter `localhost` or `127.0.0.1` as the domain if using in development wit
 
 ## Rails Installation
 
+**If you are having issues with Rails 7, Turbo, and Stimulus, make sure to check [this Wiki page](https://github.com/ambethia/recaptcha/wiki/Recaptcha-with-Turbo-and-Stimulus)!**
+
 ```ruby
 gem "recaptcha"
 ```
@@ -75,6 +77,10 @@ export RECAPTCHA_ENTERPRISE            = 'true'
 export RECAPTCHA_ENTERPRISE_API_KEY    = 'AIzvFyE3TU-g4K_Kozr9F1smEzZSGBVOfLKyupA'
 export RECAPTCHA_ENTERPRISE_PROJECT_ID = 'my-project'
 ```
+
+_note:_ you'll still have to provide `RECAPTCHA_SITE_KEY`, which will hold the value of your enterprise recaptcha key id. You will not need to provide a `RECAPTCHA_SECRET_KEY`, however.
+
+`RECAPTCHA_ENTERPRISE_API_KEY` is the enterprise key of your Google Cloud Project, which you can generate here: https://console.cloud.google.com/apis/credentials.
 
 Add `recaptcha_tags` to the forms you want to protect:
 
@@ -124,7 +130,7 @@ The following options are available:
 | `:site_key`         | Override site API key from configuration |
 | `:error`            | Override the error code returned from the reCAPTCHA API (default: `nil`) |
 | `:size`             | Specify a size (default: `nil`) |
-| `:nonce`            | Optional. Sets nonce attribute for script. Can be generated via `SecureRandom.base64(32)`. (default: `nil`) |
+| `:nonce`            | Optional. Sets nonce attribute for script. Can be generated via `SecureRandom.base64(32)`. Use `content_security_policy_nonce` if you have `config.content_security_policy_nonce_generator` set in Rails. (default: `nil`) |
 | `:id`               | Specify an html id attribute (default: `nil`) |
 | `:callback`         | Optional. Name of success callback function, executed when the user submits a successful response |
 | `:expired_callback` | Optional. Name of expiration callback function, executed when the reCAPTCHA response expires and the user needs to re-verify. |
@@ -179,6 +185,7 @@ Some of the options available:
 | `:response`               | Custom response parameter. (default: `params['g-recaptcha-response-data']`)
 | `:hostname`               | Expected hostname or a callable that validates the hostname, see [domain validation](https://developers.google.com/recaptcha/docs/domain_validation) and [hostname](https://developers.google.com/recaptcha/docs/verify#api-response) docs. (default: `nil`, but can be changed by setting `config.hostname`)
 | `:env`                    | Current environment. The request to verify will be skipped if the environment is specified in configuration under `skip_verify_env`
+| `:json`                   | Boolean; defaults to false; if true, will submit the verification request by POST with the request data in JSON
 
 
 ### `invisible_recaptcha_tags`
@@ -201,7 +208,7 @@ It also accepts most of the options that `recaptcha_tags` accepts, including the
 | Option              | Description |
 |---------------------|-------------|
 | `:site_key`         | Override site API key from configuration |
-| `:nonce`            | Optional. Sets nonce attribute for script tag. Can be generated via `SecureRandom.base64(32)`. (default: `nil`) |
+| `:nonce`            | Optional. Sets nonce attribute for script tag. Can be generated via `SecureRandom.base64(32)`. Use `content_security_policy_nonce` if you have `config.content_security_policy_nonce_generator` set in Rails. (default: `nil`) |
 | `:id`               | Specify an html id attribute (default: `nil`) |
 | `:script`           | Same as setting both `:inline_script` and `:external_script`. If you only need one or the other, use `:inline_script` and `:external_script` instead. |
 | `:callback`         | Optional. Name of success callback function, executed when the user submits a successful response |
@@ -301,6 +308,14 @@ For more information, refer to the [v3 documentation](https://developers.google.
 With v3, you can let all users log in without any intervention at all if their score is above some
 threshold, and only show a v2 checkbox recaptcha challenge (fall back to v2) if it is below the
 threshold:
+
+This example sets v2 keys through environment variables. For more information on how to set up keys, please refer to the [documentation here](#alternative-api-key-setup).
+
+```bash
+# .env
+RECAPTCHA_SITE_KEY=6Lc6BAAAAAAAAChqRbQZcn_yyyyyyyyyyyyyyyyy
+RECAPTCHA_SECRET_KEY=6Lc6BAAAAAAAAKN3DRm6VA_xxxxxxxxxxxxxxxxx
+```
 
 ```erb
   …
@@ -416,15 +431,17 @@ but only accepts the following options:
 | Option              | Description |
 |---------------------|-------------|
 | `:site_key`         | Override site API key |
-| `:action`           | The name of the [reCAPTCHA action](https://developers.google.com/recaptcha/docs/v3#actions). Actions may only contain alphanumeric characters and slashes, and must not be user-specific. |
-| `:nonce`            | Optional. Sets nonce attribute for script. Can be generated via `SecureRandom.base64(32)`. (default: `nil`) |
+| `:action`           | The name of the [reCAPTCHA action](https://developers.google.com/recaptcha/docs/v3#actions). Actions are not case-sensitive and may only contain alphanumeric characters, slashes, and underscores, and must not be user-specific. |
+| `:nonce`            | Optional. Sets nonce attribute for script. Can be generated via `SecureRandom.base64(32)`. Use `content_security_policy_nonce` if you have `config.content_security_policy_nonce_generator` set in Rails. (default: `nil`) |
 | `:callback`         | Name of callback function to call with the token. When `element` is `:input`, this defaults to a function named `setInputWithRecaptchaResponseTokenFor#{sanitize_action(action)}` that sets the value of the hidden input to the token. |
 | `:id`               | Specify a unique `id` attribute for the `<input>` element if using `element: :input`. (default: `"g-recaptcha-response-data-"` + `action`) |
 | `:name`             | Specify a unique `name` attribute for the `<input>` element if using `element: :input`. (default: `g-recaptcha-response-data[action]`) |
 | `:script`           | Same as setting both `:inline_script` and `:external_script`. (default: `true`). |
 | `:inline_script`    | If `true`, adds an inline script tag that calls `grecaptcha.execute` for the given `site_key` and `action` and calls the `callback` with the resulting response token. Pass `false` if you want to handle calling `grecaptcha.execute` yourself. (default: `true`) |
 | `:element`          | The element to render, if any (default: `:input`)<br/>`:input`: Renders a hidden `<input type="hidden">` tag. The value of this will be set to the response token by the default `setInputWithRecaptchaResponseTokenFor{action}` callback.<br/>`false`: Doesn't render any tag. You'll have to add a custom callback that does something with the token. |
-| `:turbolinks`          | If `true`, calls the js function which executes reCAPTCHA after all the dependencies have been loaded. This cannot be used with the js param `:onload`. This makes reCAPTCHAv3 usable with turbolinks. |
+| `:turbo`              | If `true`, calls the js function which executes reCAPTCHA after all the dependencies have been loaded. This cannot be used with the js param `:onload`. This makes reCAPTCHAv3 usable with turbo. |
+| `:turbolinks`         | Alias of `:turbo`. Will be deprecated soon. |
+| `:ignore_no_element`  | If `true`, adds null element checker for forms that can be removed from the page by javascript like modals with forms. (default: true) |
 
 [JavaScript resource (api.js) parameters](https://developers.google.com/recaptcha/docs/invisible#js_param):
 
@@ -471,7 +488,7 @@ are passed as a hash under `params['g-recaptcha-response-data']` with the action
 It is recommended to pass `external_script: false` on all but one of the calls to
 `recaptcha` since you only need to include the script tag once for a given `site_key`.
 
-## `recaptcha_reply`
+## `recaptcha_reply` and `recaptcha_failure_reason`
 
 After `verify_recaptcha` has been called, you can call `recaptcha_reply` to get the raw reply from recaptcha. This can allow you to get the exact score returned by recaptcha should you need it.
 
@@ -486,6 +503,8 @@ end
 ```
 
 `recaptcha_reply` will return `nil` if the the reply was not yet fetched.
+
+`recaptcha_failure_reason` will return information if verification failed. E.g. if params was wrong or api resulted some error-codes.
 
 ## I18n support
 
@@ -550,6 +569,39 @@ recaptcha_tags site_key: '6Lc6BAAAAAAAAChqRbQZcn_yyyyyyyyyyyyyyyyy'
 
 verify_recaptcha secret_key: '6Lc6BAAAAAAAAKN3DRm6VA_xxxxxxxxxxxxxxxxx'
 ```
+
+
+## hCaptcha support
+
+[hCaptcha](https://hcaptcha.com) is an alternative service providing reCAPTCHA API.
+
+To use hCaptcha:
+1. Set a site and a secret key as usual
+2. Set two options in `verify_url` and `api_service_url` pointing to hCaptcha API endpoints.
+3. Disable a response limit check by setting a `response_limit` to the large enough value (reCAPTCHA is limited by 4000 characters).
+4. It is not required to change a parameter name as [official docs suggest](https://docs.hcaptcha.com/switch) because API handles standard `g-recaptcha` for compatibility.
+
+```ruby
+# config/initializers/recaptcha.rb
+Recaptcha.configure do |config|
+  config.site_key  = '6Lc6BAAAAAAAAChqRbQZcn_yyyyyyyyyyyyyyyyy'
+  config.secret_key = '6Lc6BAAAAAAAAKN3DRm6VA_xxxxxxxxxxxxxxxxx'
+  config.verify_url = 'https://hcaptcha.com/siteverify'
+  config.api_server_url = 'https://hcaptcha.com/1/api.js'
+  config.response_limit = 100000
+  config.response_minimum = 100
+end
+```
+
+hCaptcha uses a scoring system (higher number more likely to be a bot) which is inverse of the reCaptcha scoring system (lower number more likely to be a bot). As such, a `maximum_score` attribute is provided for use with hCaptcha.
+
+```ruby
+result = verify_recaptcha(maximum_score: 0.7)
+```
+
+| Option           | Description |
+|------------------|-------------|
+| `:maximum_score` | Provide a threshold to meet or fall below. Threshold should be a float between 0 and 1 which will be tested as `score <= maximum_score`. (Default: `nil`) |
 
 ## Misc
  - Check out the [wiki](https://github.com/ambethia/recaptcha/wiki) and leave whatever you found valuable there.

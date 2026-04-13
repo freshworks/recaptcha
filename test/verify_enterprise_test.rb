@@ -1,12 +1,26 @@
 require_relative 'helper'
 
+class EnterpriseTestController
+  include Recaptcha::Adapters::ControllerMethods
+
+  attr_accessor :request, :params, :flash
+
+  def initialize
+    @flash = {}
+  end
+
+  public :verify_recaptcha
+  public :verify_recaptcha!
+  public :recaptcha_reply
+end
+
 describe 'controller helpers (enterprise)' do
   before do
     Recaptcha.configuration.enterprise = true
 
-    @controller = TestController.new
+    @controller = EnterpriseTestController.new
     @controller.request = stub(remote_ip: "1.1.1.1", format: :html)
-    @controller.params = {:recaptcha_response_field => "response", 'g-recaptcha-response-data' => 'string'}
+    @controller.params = {:recaptcha_response_field => "response", 'g-recaptcha-response-data' => "a" * 200}
   end
 
   after do
@@ -166,11 +180,21 @@ describe 'controller helpers (enterprise)' do
       assert_equal "reCAPTCHA verification failed, please try again.", @controller.flash[:recaptcha_error]
     end
 
-    it "does not verify via http call when response length exceeds G_RESPONSE_LIMIT" do
+    it "does not verify via http call when response length exceeds limit" do
       # this returns a 400 or 413 instead of a 200 response with error code
       # typical response length is less than 400 characters
       str = "a" * 4001
-      @controller.params = { 'g-recaptcha-response' => "#{str}"}
+      @controller.params = { 'g-recaptcha-response' => str}
+      assert_not_requested :get, %r{\.google\.com}
+      assert_equal false, @controller.verify_recaptcha
+      assert_equal "reCAPTCHA verification failed, please try again.", @controller.flash[:recaptcha_error]
+    end
+
+    it "does not verify via http call when response length below limit" do
+      # this returns a 400 or 413 instead of a 200 response with error code
+      # typical response length is more than 100 characters
+      str = "a" * 99
+      @controller.params = { 'g-recaptcha-response' => str}
       assert_not_requested :get, %r{\.google\.com}
       assert_equal false, @controller.verify_recaptcha
       assert_equal "reCAPTCHA verification failed, please try again.", @controller.flash[:recaptcha_error]
@@ -251,6 +275,9 @@ describe 'controller helpers (enterprise)' do
           tokenProperties: {
             valid: true,
             action: 'homepage'
+          },
+          riskAnalysis: {
+            reasons: []
           }
         }
       }
@@ -271,6 +298,11 @@ describe 'controller helpers (enterprise)' do
         assert_nil @controller.flash[:recaptcha_error]
       end
 
+      it "passes with a symbol that matches" do
+        assert verify_recaptcha(action: :homepage)
+        assert_nil @controller.flash[:recaptcha_error]
+      end
+
       it "passes with nil" do
         assert verify_recaptcha(action: nil)
         assert_nil @controller.flash[:recaptcha_error]
@@ -288,6 +320,9 @@ describe 'controller helpers (enterprise)' do
           tokenProperties: {
             valid: true,
             action: 'homepage'
+          },
+          riskAnalysis: {
+            reasons: []
           }
         }
       }
@@ -327,6 +362,55 @@ describe 'controller helpers (enterprise)' do
         assert_nil @controller.flash[:recaptcha_error]
       end
     end
+
+    describe 'score_below_threshold?' do
+      let(:default_response_hash) {
+        {
+          tokenProperties: {
+            valid: true,
+            action: 'homepage'
+          },
+          riskAnalysis: {
+            reasons: []
+          }
+        }
+      }
+
+      it "fails when score is above maximum_score" do
+        expect_http_post.to_return(body: success_body(score: 0.8))
+
+        refute verify_recaptcha(maximum_score: 0.7)
+        assert_flash_error
+      end
+
+      it "fails when response doesn't include a score" do
+        expect_http_post.to_return(body: success_body)
+
+        refute verify_recaptcha(maximum_score: 0.7)
+        assert_flash_error
+      end
+
+      it "passes with score exactly at maximum_score" do
+        expect_http_post.to_return(body: success_body(score: 0.7))
+
+        assert verify_recaptcha(maximum_score: 0.7)
+        assert_nil @controller.flash[:recaptcha_error]
+      end
+
+      it "passes when maximum_score not specified or nil" do
+        expect_http_post.to_return(body: success_body(score: 0.7))
+
+        assert verify_recaptcha()
+        assert_nil @controller.flash[:recaptcha_error]
+      end
+
+      it "passes with false" do
+        expect_http_post.to_return(body: success_body(score: 0.7))
+
+        assert verify_recaptcha(maximum_score: false)
+        assert_nil @controller.flash[:recaptcha_error]
+      end
+    end
   end
 
   describe "#recatcha_reply" do
@@ -336,7 +420,10 @@ describe 'controller helpers (enterprise)' do
           valid: true,
           action: 'homepage'
         },
-        score: 0.97
+        riskAnalysis: {
+          score: 0.97,
+          reasons: []
+        }
       }
     }
 
@@ -356,32 +443,20 @@ describe 'controller helpers (enterprise)' do
 
   private
 
-  class TestController
-    include Recaptcha::Adapters::ControllerMethods
-
-    attr_accessor :request, :params, :flash
-
-    def initialize
-      @flash = {}
-    end
-
-    public :verify_recaptcha
-    public :verify_recaptcha!
-    public :recaptcha_reply
-  end
-
-  def expect_http_post(enterprise_api_key: Recaptcha.configuration.enterprise_api_key,
-                       enterprise_project_id: Recaptcha.configuration.enterprise_project_id)
+  def expect_http_post(
+    enterprise_api_key: Recaptcha.configuration.enterprise_api_key,
+    enterprise_project_id: Recaptcha.configuration.enterprise_project_id
+  )
     stub_request(
       :post,
-      "https://recaptchaenterprise.googleapis.com/v1beta1/projects/#{enterprise_project_id}/assessments?key=#{enterprise_api_key}"
+      "https://recaptchaenterprise.googleapis.com/v1/projects/#{enterprise_project_id}/assessments?key=#{enterprise_api_key}"
     )
   end
 
   def success_body(action: nil, score: nil)
     result = default_response_hash
     result[:tokenProperties][:action] = action if action
-    result[:score] = score if score
+    result[:riskAnalysis][:score] = score if score
     result.to_json
   end
 

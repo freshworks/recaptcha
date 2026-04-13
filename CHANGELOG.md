@@ -1,5 +1,72 @@
 ## Next
+
+## 5.21.2
+* make env fall back to Rails.env if it is unset
+
+## 5.21.1
+* Fix flash not being updated when responding to :turbo_stream requests
+
+## 5.21.0
+* add referer header to #api_verification_entreprise
+
+## 5.20.0
+* turn recpatch reply into a object with logic
+
+## 5.19.0
+* require a minimum lenght of 100 for responses, configured via response_minimum
+
+## 5.18.0
+* Add key setup to v3 example in README
+* Remove unnecessary id from textarea - This was unused and may cause accessability concerns if there is more than one recaptcha on the page due to multiple elements with the same id
+* Update to latest version of rubocop
+* Drop support for Ruby 2.7; add Ruby 3.3
+* Add i18n: de, es, it, pt, pt-BR
+* Added recaptcha_failure_reason
+
+## 5.16.0
+* Allow usage of `options[:turbo]` as well as `options[:turbolinks]` for `recaptcha_v3`
+
+## 5.15.0
+* Add 3.2 to the list of Ruby CI versions
+* Add ability to submit verify_recaptcha via POST with JSON Body with `options[:json] = true`
+
+## 5.14.0
+* drop json dependency
+
+## 5.13.1
+* Permit actions as symbol
+
+## 5.13.0
+* Added option to ignore_no_element.
+
+## 5.12.3
+* Remove score fallback for enterprise
+* Update enterprise tests to v1 assessment schema
+
+## 5.12.2
+* Fix minimum score for enterprise
+
+## 5.12.1
+* Fix Japanese locale
+
+## 5.12.0
+* Added Japanese locale
+
+## 5.11.0
+* Added Dutch locale
+
+## 5.10.1
+* Fix enterprise_verify_url #415
+
+## 5.10.0
+* Drop ruby 2.4 2.5 2.6
+* Add maxiumm score support for hcaptcha
+
+## 5.9.0
 * Gracefully handle invalid params
+
+## 5.8.1
+* Allow configuring response limit
 
 ## 5.8.0
 * Add support for the enterprise API

@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require "./lib/recaptcha/version"
 
 Gem::Specification.new do |s|
@@ -10,12 +8,12 @@ Gem::Specification.new do |s|
   s.homepage    = "http://github.com/ambethia/recaptcha"
   s.summary     = s.description = "Helpers for the reCAPTCHA API"
   s.license     = "MIT"
-  #The actual ruby version needs to be 2.4.0, but since we are using 2.3.8 right now in FD, we are changing this to subdue error messages during installation
-  s.required_ruby_version = '>= 2.3.0'
+  
+  # The actual ruby version needs to be 3.0.0. We are using 2.7.8 in FD, so we are changing this to subdue error messages during installation
+  s.required_ruby_version = '>= 2.7.8'
 
   s.files       = `git ls-files lib rails README.md CHANGELOG.md LICENSE`.split("\n")
 
-  s.add_runtime_dependency "json"
   s.add_development_dependency "mocha"
   s.add_development_dependency "rake"
   s.add_development_dependency "i18n"
@@ -25,5 +23,8 @@ Gem::Specification.new do |s|
   s.add_development_dependency "webmock"
   s.add_development_dependency "rubocop"
 
-  s.metadata = { "source_code_uri" => "https://github.com/ambethia/recaptcha" }
+  s.metadata = {
+    "source_code_uri" => "https://github.com/ambethia/recaptcha",
+    "rubygems_mfa_required" => "true"
+  }
 end
