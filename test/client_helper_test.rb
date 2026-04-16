@@ -90,6 +90,19 @@ describe 'View helpers' do
       html.must_include("onload=executeRecaptchaForRequest")
     end
   end
+  
+  describe "turbo" do
+    it "adds onload to defined function" do
+      html = recaptcha_v3(action: 'request', turbo: true)
+      html.must_include("onload=executeRecaptchaForRequest")
+    end
+
+    it "overrides specified onload" do
+      html = recaptcha_v3(action: 'request', onload: "foobar", turbo: true)
+      html.wont_include("onload=foobar")
+      html.must_include("onload=executeRecaptchaForRequest")
+    end
+  end
 
   it "adds :render option to the url" do
     html = recaptcha_tags(render: 'onload')
@@ -236,6 +249,28 @@ describe 'View helpers' do
     it "does not have obsole closing script tag" do
       html = recaptcha_v3 action: :foo
       assert html.scan(/script/).length.even?
+    end
+
+    it "outputs element checking when ignore_no_element is not set" do
+      output = recaptcha_v3(action: 'foo')
+      assert_includes output, 'if (element !== null)'
+    end
+
+    it 'outputs element checking for null when ignore_no_element is true' do
+      output = recaptcha_v3(action: 'foo', ignore_no_element: true)
+      assert_includes output, 'if (element !== null)'
+    end
+
+    it 'does not output element checking for null when ignore_no_element is false' do
+      output = recaptcha_v3(action: 'foo', ignore_no_element: false)
+      refute_includes output, 'if (element !== null)'
+    end
+
+    it 'does not output an inline script attribute' do
+      output = recaptcha_v3(action: 'foo', inline_script: true)
+      refute_includes output, 'inline_script'
+      output = recaptcha_v3(action: 'foo', inline_script: false)
+      refute_includes output, 'inline_script'
     end
   end
 end

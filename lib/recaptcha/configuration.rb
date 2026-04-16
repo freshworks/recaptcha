@@ -34,14 +34,16 @@ module Recaptcha
       'free_server_url' => 'https://www.recaptcha.net/recaptcha/api.js',
       'enterprise_server_url' => 'https://www.recaptcha.net/recaptcha/enterprise.js',
       'free_verify_url' => 'https://www.recaptcha.net/recaptcha/api/siteverify',
-      'enterprise_verify_url' => 'https://recaptchaenterprise.googleapis.com/v1beta1/projects'
+      'enterprise_verify_url' => 'https://recaptchaenterprise.googleapis.com/v1/projects'
     }.freeze
 
-    attr_accessor :default_env, :skip_verify_env, :proxy, :secret_key, :site_key, :handle_timeouts_gracefully, :hostname
-    attr_accessor :enterprise, :enterprise_api_key, :enterprise_project_id
+    attr_accessor(
+      :default_env, :skip_verify_env, :proxy, :secret_key, :site_key, :handle_timeouts_gracefully,
+      :hostname, :enterprise, :enterprise_api_key, :enterprise_project_id, :response_limit, :response_minimum
+    )
     attr_writer :api_server_url, :verify_url
 
-    def initialize #:nodoc:
+    def initialize # :nodoc:
       @default_env = ENV['RAILS_ENV'] || ENV['RACK_ENV'] || (Rails.env if defined? Rails.env)
       @skip_verify_env = %w[test cucumber]
       @handle_timeouts_gracefully = true
@@ -55,6 +57,9 @@ module Recaptcha
 
       @verify_url = nil
       @api_server_url = nil
+
+      @response_limit = 4000
+      @response_minimum = 100
     end
 
     def secret_key!

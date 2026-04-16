@@ -1,10 +1,26 @@
 require_relative 'helper'
 
+class TestController
+  include Recaptcha::Adapters::ControllerMethods
+
+  attr_accessor :request, :params, :flash
+
+  def initialize
+    @flash = {}
+  end
+
+  public :verify_recaptcha
+  public :verify_recaptcha!
+  public :recaptcha_reply
+  public :recaptcha_response_token
+  public :recaptcha_failure_reason
+end
+
 describe 'controller helpers' do
   before do
     @controller = TestController.new
     @controller.request = stub(remote_ip: "1.1.1.1", format: :html)
-    @controller.params = {:recaptcha_response_field => "response", 'g-recaptcha-response-data' => 'string'}
+    @controller.params = {:recaptcha_response_field => "response", 'g-recaptcha-response-data' => "a" * 200}
   end
 
   describe "#verify_recaptcha!" do
@@ -20,6 +36,22 @@ describe 'controller helpers' do
       @controller.expects(:verify_recaptcha).returns(:foo)
 
       assert_equal :foo, @controller.verify_recaptcha!
+    end
+
+    it "raise with informative error message when it fails" do
+      response_hash = {
+        success: true,
+        action: 'homepage',
+        score: 0.4
+      }
+
+      expect_http_post.to_return(body: response_hash.to_json)
+
+      error = assert_raises Recaptcha::VerifyError do
+        @controller.verify_recaptcha!(minimum_score: 0.9)
+      end
+
+      assert_equal "Recaptcha score didn't exceed the minimum: 0.4 < 0.9.", error.message
     end
   end
 
@@ -44,6 +76,8 @@ describe 'controller helpers' do
 
       refute @controller.verify_recaptcha
       assert_equal "reCAPTCHA verification failed, please try again.", @controller.flash[:recaptcha_error]
+      reason = @controller.recaptcha_failure_reason.gsub('"=>"', '" => "') # ruby 3.4+ adds spaces
+      assert_equal "Recaptcha failure after api call. Api reply: {\"foo\" => \"false\", \"bar\" => \"invalid-site-secret-key\"}.", reason
     end
 
     it "adds an error to the model" do
@@ -64,6 +98,7 @@ describe 'controller helpers' do
 
       assert @controller.verify_recaptcha(secret_key: key)
       assert_nil @controller.flash[:recaptcha_error]
+      assert_nil @controller.recaptcha_failure_reason
     end
 
     it "returns true on success without remote_ip" do
@@ -71,7 +106,7 @@ describe 'controller helpers' do
       secret_key = Recaptcha.configuration.secret_key
       stub_request(
         :get,
-        "https://www.recaptcha.net/recaptcha/api/siteverify?response=string&secret=#{secret_key}"
+        "https://www.recaptcha.net/recaptcha/api/siteverify?response=#{"a" * 200}&secret=#{secret_key}"
       ).to_return(body: '{"success":true}')
 
       assert @controller.verify_recaptcha(skip_remote_ip: true)
@@ -164,10 +199,20 @@ describe 'controller helpers' do
       assert_equal "reCAPTCHA verification failed, please try again.", @controller.flash[:recaptcha_error]
     end
 
-    it "does not verify via http call when response length exceeds G_RESPONSE_LIMIT" do
+    it "does not verify via http call when response length exceeds limit" do
       # this returns a 400 or 413 instead of a 200 response with error code
       # typical response length is less than 400 characters
       str = "a" * 4001
+      @controller.params = { 'g-recaptcha-response' => "#{str}"}
+      assert_not_requested :get, %r{\.google\.com}
+      assert_equal false, @controller.verify_recaptcha
+      assert_equal "reCAPTCHA verification failed, please try again.", @controller.flash[:recaptcha_error]
+    end
+
+    it "does not verify via http call when response length below limit" do
+      # this returns a 400 or 413 instead of a 200 response with error code
+      # typical response length is less than 100 characters
+      str = "a" * 99
       @controller.params = { 'g-recaptcha-response' => "#{str}"}
       assert_not_requested :get, %r{\.google\.com}
       assert_equal false, @controller.verify_recaptcha
@@ -289,6 +334,7 @@ describe 'controller helpers' do
       it "fails when score is below minimum_score" do
         refute verify_recaptcha(minimum_score: 0.5)
         assert_flash_error
+        assert_equal "Recaptcha score didn't exceed the minimum: 0.4 < 0.5.", @controller.recaptcha_failure_reason
       end
 
       it "fails when response doesn't include a score" do
@@ -309,6 +355,43 @@ describe 'controller helpers' do
 
       it "passes with false" do
         assert verify_recaptcha(minimum_score: false)
+        assert_nil @controller.flash[:recaptcha_error]
+      end
+    end
+
+    describe 'score_below_threshold?' do
+      let(:default_response_hash) { {
+        success: true,
+        action: 'homepage',
+      } }
+
+      before do
+        expect_http_post.to_return(body: success_body(score: 0.8))
+      end
+
+      it "fails when score is above maximum_score" do
+        refute verify_recaptcha(maximum_score: 0.7)
+        assert_flash_error
+      end
+
+      it "fails when response doesn't include a score" do
+        expect_http_post.to_return(body: success_body())
+        refute verify_recaptcha(maximum_score: 0.8)
+        assert_flash_error
+      end
+
+      it "passes with score exactly at maximum_score" do
+        assert verify_recaptcha(maximum_score: 0.8)
+        assert_nil @controller.flash[:recaptcha_error]
+      end
+
+      it "passes when maximum_score not specified or nil" do
+        assert verify_recaptcha()
+        assert_nil @controller.flash[:recaptcha_error]
+      end
+
+      it "passes with false" do
+        assert verify_recaptcha(maximum_score: false)
         assert_nil @controller.flash[:recaptcha_error]
       end
     end
@@ -335,6 +418,19 @@ describe 'controller helpers' do
     end
   end
 
+  describe "recaptcha_failure_reason" do
+    let(:default_response_hash) { {
+      success: true,
+      score: 0.97,
+      'error-codes': ['some-api-error']
+    } }
+    it "contains the error-codes when reply has those" do
+      expect_http_post.to_return(body: success_body)
+      refute verify_recaptcha()
+      assert_equal "Recaptcha api call returned with error-codes: [\"some-api-error\"].", @controller.recaptcha_failure_reason
+    end
+  end
+
   describe "#recaptcha_response_token" do
     it "returns an empty string when params are empty and no action is provided" do
       @controller.params = {}
@@ -357,8 +453,7 @@ describe 'controller helpers' do
     end
 
     it "returns the g-recaptcha-response  when response is valid and no action is provided" do
-      @controller.params = { "g-recaptcha-response" => "recaptcha-response" }
-      assert_equal @controller.recaptcha_response_token, "recaptcha-response"
+      assert_equal @controller.recaptcha_response_token, "a" * 200
     end
 
     it "returns an empty string when params are empty and an action is provided" do
@@ -404,25 +499,10 @@ describe 'controller helpers' do
 
   private
 
-  class TestController
-    include Recaptcha::Adapters::ControllerMethods
-
-    attr_accessor :request, :params, :flash
-
-    def initialize
-      @flash = {}
-    end
-
-    public :verify_recaptcha
-    public :verify_recaptcha!
-    public :recaptcha_reply
-    public :recaptcha_response_token
-  end
-
   def expect_http_post(secret_key: Recaptcha.configuration.secret_key)
     stub_request(
       :get,
-      "https://www.recaptcha.net/recaptcha/api/siteverify?remoteip=1.1.1.1&response=string&secret=#{secret_key}"
+      "https://www.recaptcha.net/recaptcha/api/siteverify?remoteip=1.1.1.1&response=#{"a" * 200}&secret=#{secret_key}"
     )
   end
 
